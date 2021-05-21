@@ -1,0 +1,5 @@
+struct joint_6dof
+{
+    string joint_name;
+    double joint_pos[6];
+};
