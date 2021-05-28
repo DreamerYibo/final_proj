@@ -44,7 +44,7 @@ target_link_libraries(joint_6dof fastcdr fastrtps
         joint_6dof_lib )
 
 
-add_executable(ctl_test2 ctl_test2.cpp joint_6dofPubSubTypes.cxx joint_6dofPublisher.cxx EfortKine.cpp)
+add_executable(ctl_test2 ctl_test2.cpp joint_6dofPubSubTypes.cxx joint_6dofPublisher.cxx EfortKine.cpp efort_control.cpp)
 target_include_directories(ctl_test2 PUBLIC
 ${ADVANTECH_HEADER_DIR}
 ${ADV_GENERAL_HEADER_DIR}
@@ -57,6 +57,21 @@ ${ADVANTECH_HEADER_DIR}/ADVMOT.lib
 fastcdr 
 fastrtps
 joint_6dof_lib)
+
+add_executable(get_6Tt get_6Tt.cpp joint_6dofPubSubTypes.cxx joint_6dofPublisher.cxx EfortKine.cpp efort_control.cpp)
+target_include_directories(get_6Tt PUBLIC
+${ADVANTECH_HEADER_DIR}
+${ADV_GENERAL_HEADER_DIR}
+${EIGEN_INCLUDE_DIR}
+)
+
+
+target_link_libraries(get_6Tt
+${ADVANTECH_HEADER_DIR}/ADVMOT.lib
+fastcdr 
+fastrtps
+joint_6dof_lib)
+
 
 
 # add_library(simExtmytest2 SHARED simExtPluginUpdateArms.cpp ${my_cplsimlib_source1} ${my_cplsimlib_source2} joint_6dofSubscriber.cxx joint_6dofPubSubTypes.cxx)

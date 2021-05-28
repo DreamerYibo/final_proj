@@ -1,5 +1,5 @@
 #include "EfortKine.h"
-double pi = M_PI;
+#include <iomanip>
 
 EfortRobo::EfortRobo(const std::string type)
 {
@@ -242,7 +242,7 @@ std::vector<Vec6d> EfortRobo::inv_kine(Eigen::Matrix<double, 4, 4> &kn_T0_6, std
     }
     else
     {
-        auto x_sol_temp = x_sol;
+        auto x_sol_temp = x_sol; // save the abs diff between x_sol and target_joint_pos
         auto iter = x_sol_temp.begin();
         std::vector<double> abs_sum(x_sol.size());
         int i1 = 0;
@@ -251,8 +251,16 @@ std::vector<Vec6d> EfortRobo::inv_kine(Eigen::Matrix<double, 4, 4> &kn_T0_6, std
             *(iter) = *(iter)-target_joint_pos;
             *(iter) = iter->cwiseAbs();
             //std::cout << "\n debug: " << iter->transpose();
+            for (int i = 0; i < 6; i++)
+            {
+                if ((*iter)(i) > pi) // case: jump between [-pi, pi]
+                {
+                    (*iter)(i) = abs((*iter)(i)-2 * pi); // case: jump between [-pi, pi]
+                }
+            };
 
             abs_sum[i1] = iter->sum();
+
             i1++;
             iter++;
         }
@@ -265,9 +273,22 @@ std::vector<Vec6d> EfortRobo::inv_kine(Eigen::Matrix<double, 4, 4> &kn_T0_6, std
         std::advance(iter2, dis);
         std::advance(iter3, dis);
 
-        if (((*iter3).array() > 3 * pi / 180.0).any()) // joint pos jerk more than 3 degree
+        if (((*iter3).array() > (3 * pi / 180.0)).any()) // joint pos jerk more than 3 degree
         {
             std::cout << "WARNING: THE LINE_TRAJ PLANNING FCN HAS A JERK!!!\n";
+            std::cout << "target_joint_pos:\n"
+                      << target_joint_pos.transpose() << "\n";
+            std::cout << "chosen_joint_plan_pos:\n"
+                      << (*iter2).transpose() << "\n";
+            std::cout << "x_sol:\n";
+
+            // debug
+            std::cout << std::fixed << std::setprecision(7);
+            for (int i = 0; i < x_sol.size(); i++)
+            {
+                std::cout << x_sol[i].transpose() << "\n";
+            }
+            std::cout << std::defaultfloat;
         }
 
         x_sol_closest.push_back(*iter2);
@@ -301,7 +322,7 @@ void EfortRobo::line_traj_planning(std::vector<Vec6d> &result_cont, Vec6d &init_
     double t = param.t0;
     double t0 = param.t0;
     double tf = param.tf;
-    double delta_t = (tf - t0) / (param.samples_num-1.0);
+    double delta_t = (tf - t0) / (param.samples_num - 1.0);
 
     Eigen::Matrix4d plan_T0_6 = Eigen::Matrix4d::Zero();
 
@@ -332,14 +353,81 @@ void EfortRobo::line_traj_planning(std::vector<Vec6d> &result_cont, Vec6d &init_
     }
 }
 
-void EfortRobo::joint_space_planning(std::vector<Vec6d> &result_cont, Vec6d &init_joint_pos, Vec6d &target_joint_pos, PlanParam &param)
+void EfortRobo::rotate_traj_planning(std::vector<Vec6d> &result_cont, Vec6d &init_joint_pos, Eigen::Vector3d k_axis, double alpha, PlanParam &param)
 {
-    const double Max_ang_vel = 8 * pi / 180.0;
+    Eigen::Matrix4d init_mat = EfortRobo::forward_kine(init_joint_pos);
+    Eigen::Vector3d start_pos = init_mat.block<3, 1>(0, 3);
+    Eigen::Vector3d end_pos = start_pos; //position would not be changed
 
     double t = param.t0;
     double t0 = param.t0;
     double tf = param.tf;
-    double delta_t = (tf - t0) / (param.samples_num-1.0);
+    double delta_t = (tf - t0) / (param.samples_num - 1.0);
+
+    Eigen::Matrix4d plan_T0_6 = Eigen::Matrix4d::Zero();
+
+    //std::cout << init_mat.block<3, 3>(0, 0); //debug
+
+    Vec6d plan_joint_pos = init_joint_pos;
+
+    // std::cout << "\ndebug 3\n";
+    plan_T0_6.block<3, 1>(0, 3) = init_mat.block<3, 1>(0, 3); // the pos stays the same
+    plan_T0_6.block<1, 4>(3, 0) << 0, 0, 0, 1;
+    // std::cout << "\ndebug 4\n";
+
+    Eigen::Matrix<double, 3, 3> pose_plan, pose_final;
+    Eigen::Matrix<double, 3, 3> pose_init = init_mat.block<3, 3>(0, 0);
+    pose_final = Rot_K(k_axis, alpha) * pose_init;
+    plan_joint_pos = (inv_kine(plan_T0_6, "search", plan_joint_pos))[0];
+
+    auto joint_mean_angular_vel = (plan_joint_pos - init_joint_pos).cwiseAbs() / (tf - t0);
+    if ((joint_mean_angular_vel.array() > Max_ang_vel).any()) // angular vel should not be greater than 8 degree/s
+    {
+        std::cout << "22222222222joint_space_planning's tf is too low and the angular vel is too great!\n";
+        double max_mean_vel = joint_mean_angular_vel.maxCoeff();
+        tf = floor(tf * max_mean_vel / Max_ang_vel) + 1.0;
+        delta_t = (tf - t0) / (param.samples_num - 1.0);
+    }
+
+    for (int i = 0; i < param.samples_num; i++)
+    {
+        double tau = (t - t0) / (tf - t0);
+        double lambda = 10 * pow(tau, 3) - 15 * pow(tau, 4) + 6 * pow(tau, 5); //Zero initial condition for v and acc.
+        //Eigen::Vector3d position_plan = start_pos + lambda * (end_pos - start_pos);
+        pose_plan = Rot_K(k_axis, alpha * lambda) * pose_init;
+        plan_T0_6.block<3, 3>(0, 0) = pose_plan;
+        plan_joint_pos = (inv_kine(plan_T0_6, "search", plan_joint_pos))[0];
+
+        // std::cout << "\ndebug 2\n";
+        if (i > 0)
+        {
+            Vec6d temp_diff = (plan_joint_pos - result_cont.back()).cwiseAbs();
+            if ((temp_diff.array() > 0.5).any())
+            {
+                std::cout << "\nWarining:rotate_traj_planning!!!\n"
+                          << temp_diff.transpose() << "\n";
+            }
+        }
+        else
+        {
+            Vec6d temp_diff = (plan_joint_pos - init_joint_pos).cwiseAbs();
+            if ((temp_diff.array() > 0.5).any())
+            {
+                std::cout << "\nWarining:rotate_traj_planning!!!\n"
+                          << temp_diff.transpose() << "\n";
+            }
+        }
+        result_cont.push_back(plan_joint_pos);
+        t += delta_t;
+    }
+}
+
+void EfortRobo::joint_space_planning(std::vector<Vec6d> &result_cont, Vec6d &init_joint_pos, Vec6d &target_joint_pos, PlanParam &param)
+{
+    double t = param.t0;
+    double t0 = param.t0;
+    double tf = param.tf;
+    double delta_t = (tf - t0) / (param.samples_num - 1.0);
     auto delta_joint_pos = target_joint_pos - init_joint_pos;
 
     auto joint_mean_angular_vel = (target_joint_pos - init_joint_pos).cwiseAbs() / (tf - t0);
@@ -348,7 +436,10 @@ void EfortRobo::joint_space_planning(std::vector<Vec6d> &result_cont, Vec6d &ini
     {
         std::cout << "joint_space_planning's tf is too low and the angular vel is too great!\n";
         double max_mean_vel = joint_mean_angular_vel.maxCoeff();
-        tf = floor(tf * max_mean_vel / Max_ang_vel) + 1.0;
+        tf = floor(tf * max_mean_vel / Max_ang_vel) * 1.2 + 1.0;
+        param.tf = tf; // update tf
+        std::cout << "\nnew tf: " << tf << "\n";
+        delta_t = (tf - t0) / (param.samples_num - 1.0);
     }
 
     for (int i = 0; i < param.samples_num; i++)
@@ -359,6 +450,10 @@ void EfortRobo::joint_space_planning(std::vector<Vec6d> &result_cont, Vec6d &ini
         result_cont.push_back(joint_pos_plan);
         t += delta_t;
     }
+}
+
+void param_normalize(PlanParam &param)
+{
 }
 
 std::vector<double> linspace(double start, double end, unsigned int amount_of_points)
@@ -382,4 +477,26 @@ std::vector<double> linspace(double start, double end, unsigned int amount_of_po
         iter++;
     }
     return series;
+}
+
+Eigen::Matrix<double, 3, 3> Rot_K(Eigen::Vector3d K, double q)
+{
+    double cq = cos(q);
+    double sq = sin(q);
+    double vq = 1 - cos(q);
+
+    double k_det = sqrt(K(0) * K(0) + K(1) * K(1) + K(2) * K(2));
+    Eigen::Vector3d k_unit = K / k_det; // unify
+
+    double kx = k_unit(0);
+    double ky = k_unit(1);
+    double kz = k_unit(2);
+
+    Eigen::Matrix<double, 3, 3> R;
+
+    R << kx * kx * vq + cq, ky * kx * vq - kz * sq, kz * kx * vq + ky * sq,
+        kx * ky * vq + kz * sq, ky * ky * vq + cq, kz * ky * vq - kx * sq,
+        kx * kz * vq - ky * sq, ky * kz * vq + kx * sq, kz * kz * vq + cq;
+
+    return R;
 }

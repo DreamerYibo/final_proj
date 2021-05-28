@@ -152,7 +152,7 @@ void joint_6dofPublisher::run()
             st.joint_pos()[j] += 0.01;
         }
         st.joint_name() = "robot" + std::to_string(i % 3 + 1);
-        std::cout << "sent robot name: " << st.joint_name() << "\n";
+        //for debug //std::cout << "sent robot name: " << st.joint_name() << "\n";
         std::this_thread::sleep_for(std::chrono::milliseconds(40));
     }
 }
@@ -195,6 +195,6 @@ void joint_6dofPublisher::publish(Eigen::MatrixXd &joint_pos_mat, int index)
         st.joint_pos()[i] = joint_pos_mat(i);
     }
     writer_->write(&st);
-    std::cout << "sent robot name: " << st.joint_name() << "\n";
+    //std::cout << "sent robot name: " << st.joint_name() << "\n";
     return ;
 }
