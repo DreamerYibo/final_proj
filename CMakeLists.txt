@@ -72,6 +72,20 @@ fastcdr
 fastrtps
 joint_6dof_lib)
 
+add_executable(get_DH_calibration get_DH_calibration.cpp joint_6dofPubSubTypes.cxx joint_6dofPublisher.cxx EfortKine.cpp efort_control.cpp)
+target_include_directories(get_DH_calibration PUBLIC
+${ADVANTECH_HEADER_DIR}
+${ADV_GENERAL_HEADER_DIR}
+${EIGEN_INCLUDE_DIR}
+)
+
+
+target_link_libraries(get_DH_calibration
+${ADVANTECH_HEADER_DIR}/ADVMOT.lib
+fastcdr 
+fastrtps
+joint_6dof_lib)
+
 
 
 # add_library(simExtmytest2 SHARED simExtPluginUpdateArms.cpp ${my_cplsimlib_source1} ${my_cplsimlib_source2} joint_6dofSubscriber.cxx joint_6dofPubSubTypes.cxx)

@@ -54,5 +54,6 @@ void out_rel_pos(const std::vector<HAND> &axis_hand, const std::vector<F64> &ini
 int ReadnSet_PTdata_fromtxt(const HAND &m_Axishand, const std::string &Filename, int amount);
 void GetAxisStateStr(std::string &str, U16 state_num);
 void Read_target_jointpos_sets(std::vector<Vec6d> &target_jointpos_cont, const std::string &Filename);
-void preview_PTmove(joint_6dofPublisher &mypub, std::vector<Vec6d> &traj_planning_result_cont, PlanParam &param, std::string mode);
+void preview_PTmove(joint_6dofPublisher &mypub, std::vector<Vec6d> &traj_planning_result_cont, PlanParam &param, std::string mode, std::string robot_name = "robot1");
 void set_PTdata(PlanParam &param, std::vector<Vec6d> &traj_planning_result_cont, HAND *m_Axishand, std::string robot_name);
+bool Axises_all_ready(HAND *axis_hand);

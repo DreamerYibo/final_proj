@@ -191,10 +191,11 @@ void Read_target_jointpos_sets(std::vector<Vec6d> &target_jointpos_cont, const s
     data.close();
 }
 
-void preview_PTmove(joint_6dofPublisher &mypub, std::vector<Vec6d> &traj_planning_result_cont, PlanParam &param, std::string mode)
+void preview_PTmove(joint_6dofPublisher &mypub, std::vector<Vec6d> &traj_planning_result_cont, PlanParam &param, std::string mode, std::string robot_name)
 {
     Eigen::MatrixXd joint_input(6, 1);
     double publish_sleep_time = 10;
+    int ind = 1; // robot 1 as default
 
     if (mode == "real_time")
     {
@@ -204,10 +205,26 @@ void preview_PTmove(joint_6dofPublisher &mypub, std::vector<Vec6d> &traj_plannin
     {
         publish_sleep_time = 5;
     }
+    if (robot_name == "robot1")
+    {
+        ind = 1;
+    }
+    else if (robot_name == "robot2")
+    {
+        ind = 2;
+    }
+    else if (robot_name == "robot3")
+    {
+        ind = 3;
+    }
+    else
+    {
+        std::cout << "Wrong Robot_name!\n";
+    }
     for (int i = 0; i < traj_planning_result_cont.size(); i++)
     {
         joint_input = traj_planning_result_cont[i];
-        mypub.publish(joint_input, 2);
+        mypub.publish(joint_input, ind);
         // joint_input(1) += 0.1;
         std::this_thread::sleep_for(std::chrono::milliseconds((int)publish_sleep_time));
     }
@@ -287,4 +304,21 @@ bool close_6_axises(HAND *axis_hand)
         Acm_AxClose(&(axis_hand[i]));     // close axises.
     }
     return 1;
+}
+
+bool Axises_all_ready(HAND *axis_hand)
+{
+    bool result = 0;
+    U16 state;
+    std::string str_state;
+    bool temp[6];
+    //auto iter = axis_hand.cbegin();
+
+    for (int i = 0; i < 6; i++)
+    {
+        Acm_AxGetState(axis_hand[i], &state);
+        temp[i] = (state == STA_AX_READY);
+    }
+    result = (temp[0] && temp[1] && temp[2] && temp[3] && temp[4] && temp[5]);
+    return result;
 }

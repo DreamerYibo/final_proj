@@ -15,6 +15,17 @@ EfortRobo::EfortRobo(const std::string type)
         std::cout << "ER20 links' parameter: \n"
                   << L1 << " " << L2 << " " << L3 << " " << L4 << " " << L5 << " " << L8 << "\n";
     }
+    if (type == "ER10")
+    {
+        L1 = 422;
+        L2 = 681;
+        L3 = 174;
+        L4 = 745;
+        L5 = 117;
+        L8 = 195;
+        std::cout << "ER10 links' parameter: \n"
+                  << L1 << " " << L2 << " " << L3 << " " << L4 << " " << L5 << " " << L8 << "\n";
+    }
 }
 
 Eigen::Matrix<double, 4, 4> &EfortRobo::T0_3(double x1, double x2, double x3)

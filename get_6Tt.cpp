@@ -23,11 +23,27 @@ int main()
     using std::cout;
     using std::endl;
 
+    std::ofstream file_out;
     joint_6dofPublisher mypub;
-    EfortRobo robo2("ER20");
-    const int index_offset = 6; // robot 2 index offset
+    const std::string robot_name = "robot2"; // specify which robot to control and to preview! CRITICAL
+    std::string robot_type = "ER20";
+    int index_offset = 0; // robot 1 index offset
     Eigen::MatrixXd joint_input(6, 1);
     joint_input << 1, 2, 3, 4, 5, 6;
+
+    file_out.open(robot_name + "_get_6Tt.txt", std::ios_base::app);
+    if (!file_out.is_open())
+    {
+        std::cout << robot_name + "_get_6Tt.txt"
+                  << " failed!\n";
+        return 23109;
+    }
+    else
+    {
+        auto timenow = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+        file_out << "\n-----------------------------" << ctime(&timenow) << "-----------------------------\n";
+        file_out << std::scientific << std::setprecision(16);
+    }
 
     std::vector<Vec6d> traj_planning_result_cont;           // clear it before each use of EfortKine::line_traj_planning()
     std::vector<std::vector<Vec6d>> executing_PT_data_sets; // push generated traj into this;
@@ -38,9 +54,9 @@ int main()
     U32 m_DevNum;
     HAND m_Axishand[6];
 
-    std::string temp_str;
+    std::string temp_str, r;
 
-    Ret[0] = Acm_GetDevNum(Adv_PCI1203, 0, (&m_DevNum)); // Get M0 DEVNUM
+    Ret[0] = Acm_GetDevNum(Adv_PCI1203, 0, (&m_DevNum)); // Get M0 DEVNUM. USE THE SAME DEVICE TO CONTROL ROBOT1,2,3 RESPECTIVELY
     std::cout << "The M0 device number is " << m_DevNum << std::endl;
 
     //cin >> temp;
@@ -48,6 +64,29 @@ int main()
     Ret[0] = Acm_GetU32Property(m_Devhand, FT_DevAxesCount, &(m_ulAxisCount)); //Get total number of axies of M0
     cout << "Return value for getting the M0 device's axises " << std::hex << Ret[0] << endl;
     cout << "The number of axises is:" << m_ulAxisCount << endl;
+
+    if (robot_name == "robot1")
+    {
+        index_offset = 0;
+        robot_type = "ER20";
+    }
+    else if (robot_name == "robot2")
+    {
+        index_offset = 6;
+        robot_type = "ER20";
+    }
+    else if (robot_name == "robot3")
+    {
+        index_offset = 12;
+        robot_type = "ER10";
+    }
+    else
+    {
+        std::cout << "Wrong Robot_name!\n";
+        return 2213;
+    }
+
+    EfortRobo robo(robot_type); // build the robo kinematic model
 
     for (int i = 0; i < m_ulAxisCount; i++)
     {
@@ -109,13 +148,24 @@ int main()
     }
 
     Vec6d init_joint_pos, target_joint_pos, P_joint_pos;
-    init_joint_pos << -pi / 2, 0.6, -0.3, 0, -0.4, 0; // init pos P
-    P_joint_pos = init_joint_pos;                          // init pos P
 
+    if (robot_name == "robot1")
+        init_joint_pos << -(pi * 5.0 / 7.0), 0.7, -0.2, 0.3, -0.3, 0.4; // init pos P
+    else if (robot_name == "robot2")
+        init_joint_pos << (pi * 4.0 / 7.0), 0.7, -0.3, -0.7, -0.3, -0.2; // init pos P
+    else if (robot_name == "robot3")
+        init_joint_pos << 0, 0.7, -0.2, 0, -0.7, 0.4; // init pos P
+    else
+    {
+        std::cout << "Wrong Robot_name!\n";
+        return 2215;
+    }
+
+    P_joint_pos = init_joint_pos; // init pos P
     if (mypub.init())
     {
         //std::vector<Vec6d> joint_pos_target_series;
-        for (int i = 0; i < 3; i++) //rotate along x y and z respectively
+        for (int i = 0; i < 4; i++) //rotate along x y and z respectively. ROTATE AROUND AXIS1  TO GET THE ORIGN'S X AND Y VALUE OF FRAME0!
         {
             if (i == 0 || i == 1)
             {
@@ -124,9 +174,9 @@ int main()
                 param.t0 = 0;
                 param.samples_num = 200; //MUST BE SMALLER THAN 512
 
-                Eigen::Vector3d k_axis = (robo2.forward_kine(init_joint_pos)).block<3, 1>(0, i); // along end's x or y axis
-                robo2.rotate_traj_planning(traj_planning_result_cont, init_joint_pos, k_axis, 0.8, param);
-                preview_PTmove(mypub, traj_planning_result_cont, param, "quick");
+                Eigen::Vector3d k_axis = (robo.forward_kine(init_joint_pos)).block<3, 1>(0, i); // along end's x or y axis
+                robo.rotate_traj_planning(traj_planning_result_cont, init_joint_pos, k_axis, 0.8, param);
+                preview_PTmove(mypub, traj_planning_result_cont, param, "quick", robot_name);
 
                 init_joint_pos = traj_planning_result_cont.back(); // update the init_joint_pos
                 executing_PT_data_sets.push_back(traj_planning_result_cont);
@@ -137,8 +187,8 @@ int main()
                 param.tf = 14; // mean ang vel should be lower than 10 degree/s.
                 param.t0 = 0;
                 param.samples_num = 200; //MUST BE SMALLER THAN 512
-                robo2.joint_space_planning(traj_planning_result_cont, init_joint_pos, P_joint_pos, param);
-                preview_PTmove(mypub, traj_planning_result_cont, param, "quick");
+                robo.joint_space_planning(traj_planning_result_cont, init_joint_pos, P_joint_pos, param);
+                preview_PTmove(mypub, traj_planning_result_cont, param, "quick", robot_name);
                 init_joint_pos = traj_planning_result_cont.back(); // update the init_joint_pos
                 executing_PT_data_sets.push_back(traj_planning_result_cont);
                 execute_PT_param_set.push_back(param);
@@ -152,9 +202,9 @@ int main()
                 param.t0 = 0;
                 param.samples_num = 200; //MUST BE SMALLER THAN 512
 
-                k_axis = (robo2.forward_kine(init_joint_pos)).block<3, 1>(0, i); // along end's x or y axis
-                robo2.rotate_traj_planning(traj_planning_result_cont, init_joint_pos, k_axis, -0.8, param);
-                preview_PTmove(mypub, traj_planning_result_cont, param, "quick");
+                k_axis = (robo.forward_kine(init_joint_pos)).block<3, 1>(0, i); // along end's x or y axis
+                robo.rotate_traj_planning(traj_planning_result_cont, init_joint_pos, k_axis, -0.8, param);
+                preview_PTmove(mypub, traj_planning_result_cont, param, "quick", robot_name);
 
                 init_joint_pos = traj_planning_result_cont.back(); // update the init_joint_pos
                 executing_PT_data_sets.push_back(traj_planning_result_cont);
@@ -167,8 +217,8 @@ int main()
                 param.tf = 14; // mean ang vel should be lower than 10 degree/s.
                 param.t0 = 0;
                 param.samples_num = 200; //MUST BE SMALLER THAN 512
-                robo2.joint_space_planning(traj_planning_result_cont, init_joint_pos, P_joint_pos, param);
-                preview_PTmove(mypub, traj_planning_result_cont, param, "quick");
+                robo.joint_space_planning(traj_planning_result_cont, init_joint_pos, P_joint_pos, param);
+                preview_PTmove(mypub, traj_planning_result_cont, param, "quick", robot_name);
                 init_joint_pos = traj_planning_result_cont.back(); // update the init_joint_pos
                 executing_PT_data_sets.push_back(traj_planning_result_cont);
                 execute_PT_param_set.push_back(param);
@@ -181,15 +231,15 @@ int main()
             if (i == 2) //along z, only rotate joint 6!!!!!!
             {
                 // move 1
-                param.tf = 7; // mean ang vel should be lower than 10 degree/s.
+                param.tf = 3; // mean ang vel should be lower than 10 degree/s.
                 param.t0 = 0;
                 param.samples_num = 80; //MUST BE SMALLER THAN 512
 
                 target_joint_pos = init_joint_pos;
-                target_joint_pos(5) = target_joint_pos(5) + 0.8;
+                target_joint_pos(5) = target_joint_pos(5) + 0.3;
 
-                robo2.joint_space_planning(traj_planning_result_cont, init_joint_pos, target_joint_pos, param);
-                preview_PTmove(mypub, traj_planning_result_cont, param, "quick");
+                robo.joint_space_planning(traj_planning_result_cont, init_joint_pos, target_joint_pos, param);
+                preview_PTmove(mypub, traj_planning_result_cont, param, "quick", robot_name);
 
                 init_joint_pos = traj_planning_result_cont.back(); // update the init_joint_pos
                 executing_PT_data_sets.push_back(traj_planning_result_cont);
@@ -197,19 +247,41 @@ int main()
                 traj_planning_result_cont.clear(); // clear the last result
 
                 // move 2
-                param.tf = 12; // mean ang vel should be lower than 10 degree/s.
+                param.tf = 6; // mean ang vel should be lower than 10 degree/s.
                 param.t0 = 0;
                 param.samples_num = 80; //MUST BE SMALLER THAN 512
                 target_joint_pos = init_joint_pos;
-                target_joint_pos(5) -= 1.6;
+                target_joint_pos(5) -= 0.8;
 
-                robo2.joint_space_planning(traj_planning_result_cont, init_joint_pos, target_joint_pos, param);
-                preview_PTmove(mypub, traj_planning_result_cont, param, "quick");
+                robo.joint_space_planning(traj_planning_result_cont, init_joint_pos, target_joint_pos, param);
+                preview_PTmove(mypub, traj_planning_result_cont, param, "quick", robot_name);
 
                 init_joint_pos = traj_planning_result_cont.back(); // update the init_joint_pos
                 executing_PT_data_sets.push_back(traj_planning_result_cont);
                 execute_PT_param_set.push_back(param);
                 traj_planning_result_cont.clear(); // clear the last result
+            }
+
+            if (i == 3)
+            {
+                for (int j = 0; j < 4; j++)
+                {
+                    // move 1
+                    param.tf = 3; // mean ang vel should be lower than 10 degree/s.
+                    param.t0 = 0;
+                    param.samples_num = 80; //MUST BE SMALLER THAN 512
+
+                    target_joint_pos = init_joint_pos;
+                    target_joint_pos(0) = target_joint_pos(0) - 0.3;
+
+                    robo.joint_space_planning(traj_planning_result_cont, init_joint_pos, target_joint_pos, param);
+                    preview_PTmove(mypub, traj_planning_result_cont, param, "quick", robot_name);
+
+                    init_joint_pos = traj_planning_result_cont.back(); // update the init_joint_pos
+                    executing_PT_data_sets.push_back(traj_planning_result_cont);
+                    execute_PT_param_set.push_back(param);
+                    traj_planning_result_cont.clear(); // clear the last result
+                }
             }
         }
     }
@@ -219,19 +291,17 @@ int main()
     {
         if (i == 0)
         {
-            init_joint_pos = read_joint_pos(m_Axishand, "robot2");
-            std::cout << "the robot2's joint pos is:\n"
+            init_joint_pos = read_joint_pos(m_Axishand, robot_name);
+            std::cout << "the " << robot_name << " joint pos is:\n"
                       << init_joint_pos.transpose() << "\n";
 
             param.tf = 8; // mean ang vel should be lower than 10 degree/s.
             param.t0 = 0;
             param.samples_num = 80; //MUST BE SMALLER THAN 512
-            robo2.joint_space_planning(traj_planning_result_cont, init_joint_pos, P_joint_pos, param);
-            preview_PTmove(mypub, traj_planning_result_cont, param, "real_time");
+            robo.joint_space_planning(traj_planning_result_cont, init_joint_pos, P_joint_pos, param);
+            preview_PTmove(mypub, traj_planning_result_cont, param, "quick", robot_name);
 
-            std::cout << "BACK TO P:\n";
-            std::cout << read_joint_pos(m_Axishand, "robot2").transpose();
-            set_PTdata(param, traj_planning_result_cont, m_Axishand, "robot2");
+            set_PTdata(param, traj_planning_result_cont, m_Axishand, robot_name);
             cout << "\nStart PT move?" << endl;
             cin >> temp_str;
             if (temp_str == "N" || temp_str == "n")
@@ -245,7 +315,6 @@ int main()
             Ret = Acm_AxStartAllPT(&(m_Axishand[0]), 0, 6); //start pt move for axis_hd1 - 6
             cout << "Type in e or E to stop moving" << endl;
             cin >> temp_str;
-
             if (temp_str == "E" || temp_str == "e")
             {
                 for (int i = 0; i < 6; i++)
@@ -255,7 +324,12 @@ int main()
                     return -1;
                 }
             }
-
+            std::cout << "BACK TO P:\n";
+            std::cout << read_joint_pos(m_Axishand, robot_name).transpose();
+            file_out << "P_pos_encoder:\n"
+                     << read_joint_pos(m_Axishand, robot_name).transpose() << "\n";
+            file_out << "P_pos_ideal:\n"
+                     << traj_planning_result_cont.back().transpose() << "\n";
             //std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // wait until the axis stops.
             // continue_thr1 = 0;
             // thr1.join();
@@ -268,9 +342,9 @@ int main()
             return 1111;
         }
 
-        if (i < executing_PT_data_sets.size() - 2)
+        if (i < executing_PT_data_sets.size() - 2 - 4)
         {
-            set_PTdata(execute_PT_param_set[i], executing_PT_data_sets[i], m_Axishand, "robot2");
+            set_PTdata(execute_PT_param_set[i], executing_PT_data_sets[i], m_Axishand, robot_name);
             cout << "Start PT move?" << endl;
 
             cin >> temp_str;
@@ -296,10 +370,15 @@ int main()
                 }
                 close_6_axises(m_Axishand);
             }
+            std::cout << read_joint_pos(m_Axishand, robot_name).transpose();
+            file_out << i + 1 << " pos_encoder:\n"
+                     << read_joint_pos(m_Axishand, robot_name).transpose() << "\n";
+            file_out << i + 1 << "pos_ideal:\n"
+                     << executing_PT_data_sets[i].back().transpose() << "\n";
         }
-        else // only execute movement of the joint 6!!!
+        else if (i < executing_PT_data_sets.size() - 4) // only execute movement of the joint 6!!!
         {
-            set_PTdata(execute_PT_param_set[i], executing_PT_data_sets[i], m_Axishand, "robot2");
+            set_PTdata(execute_PT_param_set[i], executing_PT_data_sets[i], m_Axishand, robot_name);
             cout << "Start PT move?" << endl;
 
             cin >> temp_str;
@@ -327,6 +406,45 @@ int main()
                 }
                 close_6_axises(m_Axishand);
             }
+            file_out << i + 1 << " pos_encoder:\n"
+                     << read_joint_pos(m_Axishand, robot_name).transpose() << "\n";
+            file_out << i + 1 << "pos_ideal:\n"
+                     << executing_PT_data_sets[i].back().transpose() << "\n";
+        }
+        else
+        {
+            set_PTdata(execute_PT_param_set[i], executing_PT_data_sets[i], m_Axishand, robot_name);
+            cout << "Start PT move?" << endl;
+
+            cin >> temp_str;
+            if (temp_str == "N" || temp_str == "n")
+            {
+                // close the device
+                close_6_axises(m_Axishand);
+                Ret[0] = Acm_DevClose(&(m_Devhand));
+                cout << "The device is closed with return value: " << Ret[0] << endl;
+                return 1;
+            }
+
+            // 执行 三个轴PT 运动
+            // Ret = Acm_AxStartPT(m_Axishand[3], 0);
+            //Ret = Acm_AxStartAllPT(&(m_Axishand[0]), 0, 6); //start pt move for axis_hd1 - 6
+
+            Ret = Acm_AxStartPT(m_Axishand[0], 0);
+            cout << "Type in e or E to stop moving" << endl;
+            cin >> temp_str;
+            if (temp_str == "E" || temp_str == "e")
+            {
+                for (int i = 0; i < 6; i++)
+                {
+                    Acm_AxStopDec(m_Axishand[i]); // stop move.
+                }
+                close_6_axises(m_Axishand);
+            }
+            file_out << i + 1 << " pos_encoder:\n"
+                     << read_joint_pos(m_Axishand, robot_name).transpose() << "\n";
+            file_out << i + 1 << "pos_ideal:\n"
+                     << executing_PT_data_sets[i].back().transpose() << "\n";
         }
         // std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // wait until the axis stops.
     }
