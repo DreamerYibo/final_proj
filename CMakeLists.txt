@@ -86,6 +86,34 @@ fastcdr
 fastrtps
 joint_6dof_lib)
 
+add_executable(two_robos_coordinate_move two_robos_coordinate_move.cpp joint_6dofPubSubTypes.cxx joint_6dofPublisher.cxx EfortKine.cpp efort_control.cpp)
+target_include_directories(two_robos_coordinate_move PUBLIC
+${ADVANTECH_HEADER_DIR}
+${ADV_GENERAL_HEADER_DIR}
+${EIGEN_INCLUDE_DIR}
+)
+
+
+target_link_libraries(two_robos_coordinate_move
+${ADVANTECH_HEADER_DIR}/ADVMOT.lib
+fastcdr 
+fastrtps
+joint_6dof_lib)
+
+add_executable(three_robos_coordinate three_robos_coordinate.cpp joint_6dofPubSubTypes.cxx joint_6dofPublisher.cxx EfortKine.cpp efort_control.cpp)
+target_include_directories(three_robos_coordinate PUBLIC
+${ADVANTECH_HEADER_DIR}
+${ADV_GENERAL_HEADER_DIR}
+${EIGEN_INCLUDE_DIR}
+)
+
+
+target_link_libraries(three_robos_coordinate
+${ADVANTECH_HEADER_DIR}/ADVMOT.lib
+fastcdr 
+fastrtps
+joint_6dof_lib)
+
 
 
 # add_library(simExtmytest2 SHARED simExtPluginUpdateArms.cpp ${my_cplsimlib_source1} ${my_cplsimlib_source2} joint_6dofSubscriber.cxx joint_6dofPubSubTypes.cxx)

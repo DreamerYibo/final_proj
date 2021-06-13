@@ -23,7 +23,7 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 
-const long int zero_position[18] = {-38852, 1005654, 243343, -126753, 1783177, 290672, -72770, 67622, 255432, -109501, -7436, -1179597, -101830, -1794918, -1732384, 137827, 140254, -16030132};
+const long int zero_position[18] = {-38852, 1005654, 243343, -126753, 1783177, 290672, -72770, 67622, 255432, -109501, -7436, -1179597, -101830, -1794918, -373544, 137827, 140254, -16030132};
 const long int incpdeg[18] = {-53521, 65238, -59738, -28017, -25486, -15969, -53521, 65238, -59738, -28017, -25486, -15969, -55324, 55706, -55708, -31147, -26970, -14474};
 
 // extern const double pi = M_PI;
@@ -45,8 +45,17 @@ struct AxisProperties
     double AxJerk = 0;
 };
 
+struct RoboEntity // manage all kinds of ADVANTECH handles.
+{
+    U32 m_ulAxisCount;
+    HAND m_Devhand;
+    U32 m_DevNum;
+    HAND m_Axishand[6];
+};
+
 extern bool continue_thr1;
 
+bool set_robot_axises_property(const HAND *axis_hand_first, std::string robot_name);
 Vec6d read_joint_pos(const HAND *axis_hand_first, std::string robot_name); // output unit:rad. Convert encoder's value to rad.
 bool set_axis_properties(const HAND *axis_hand, const AxisProperties &axisprop);
 bool close_6_axises(HAND *axis_hand);
@@ -55,5 +64,7 @@ int ReadnSet_PTdata_fromtxt(const HAND &m_Axishand, const std::string &Filename,
 void GetAxisStateStr(std::string &str, U16 state_num);
 void Read_target_jointpos_sets(std::vector<Vec6d> &target_jointpos_cont, const std::string &Filename);
 void preview_PTmove(joint_6dofPublisher &mypub, std::vector<Vec6d> &traj_planning_result_cont, PlanParam &param, std::string mode, std::string robot_name = "robot1");
+void preview_PTmove(joint_6dofPublisher &mypub, std::vector<Vec6d> *traj_planning_result_cont_first, PlanParam &param); // preview robo1 and 2 pt move
+void preview_PTmove(std::string three_robos_pwd, joint_6dofPublisher &mypub, std::vector<Vec6d> *traj_planning_result_cont_first, PlanParam &param); // preview all three robos!
 void set_PTdata(PlanParam &param, std::vector<Vec6d> &traj_planning_result_cont, HAND *m_Axishand, std::string robot_name);
 bool Axises_all_ready(HAND *axis_hand);

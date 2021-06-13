@@ -24,7 +24,7 @@ int main() // 这个程序没有软件急停，用急停开关！
     std::ofstream file_out;
 
     joint_6dofPublisher mypub;
-    const std::string robot_name = "robot2"; // specify which robot to control and to preview! CRITICAL
+    const std::string robot_name = "robot3"; // specify which robot to control and to preview! CRITICAL
     std::string robot_type = "ER20";
     int index_offset = 0; // robot 1 index offset
 
@@ -59,8 +59,7 @@ int main() // 这个程序没有软件急停，用急停开关！
         file_out << "\n-----------------------------" << ctime(&timenow) << "-----------------------------\n";
         file_out << std::scientific << std::setprecision(16);
     }
-    std::valarray<U32>
-        Ret(6);
+    std::valarray<U32> Ret(6);
     U32 m_ulAxisCount;
     HAND m_Devhand;
     U32 m_DevNum;
@@ -231,25 +230,54 @@ int main() // 这个程序没有软件急停，用急停开关！
             // thr1.join();
             traj_planning_result_cont.clear(); // clear the last result
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+            while (!Axises_all_ready(m_Axishand)) // prevent writing new PT data before the last move is finished!!!!
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(300));
+            }
+            //std::this_thread::sleep_for(std::chrono::milliseconds(5000));
         }
 
         set_PTdata(param, executing_PT_data_sets[i], m_Axishand, robot_name);
-
+        cout << "\nStart PT move?" << endl;
+        cin >> temp_str;
+        if (temp_str == "N" || temp_str == "n")
+        {
+            // close the device
+            close_6_axises(m_Axishand);
+            Ret[0] = Acm_DevClose(&(m_Devhand));
+            cout << "The device is closed with return value: " << Ret[0] << endl;
+            return -1;
+        }
         Ret = Acm_AxStartAllPT(&(m_Axishand[0]), 0, 6); //start pt move for axis_hd1 - 6
 
-        while (1)
+        // while (1)
+        // {
+        //     std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        //     if (Axises_all_ready(m_Axishand))
+        //         break;
+        // }
+        cout << "Type in e or E to stop moving" << endl;
+        cin >> temp_str;
+        if (temp_str == "E" || temp_str == "e")
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            if (Axises_all_ready(m_Axishand))
-                break;
+            for (int i = 0; i < 6; i++)
+            {
+                Acm_AxStopDec(m_Axishand[i]); // stop move.
+                close_6_axises(m_Axishand);
+                return -1;
+            }
         }
         std::cout << read_joint_pos(m_Axishand, robot_name).transpose();
         file_out << i + 1 << " pos_encoder:\n"
                  << read_joint_pos(m_Axishand, robot_name).transpose() << "\n";
         file_out << i + 1 << "pos_ideal:\n"
                  << executing_PT_data_sets[i].back().transpose() << "\n";
-        std::this_thread::sleep_for(std::chrono::milliseconds(7000)); // wait for 5 seconds after axies are all ready
+
+        while (!Axises_all_ready(m_Axishand)) // prevent writing new PT data before the last move is finished!!!!
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        }
+        // std::this_thread::sleep_for(std::chrono::milliseconds(7000)); // wait for 5 seconds after axies are all ready
     }
     // std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // wait until the axis stops.
 

@@ -34,6 +34,8 @@ public:
     void line_traj_planning(std::vector<Vec6d> &result_cont, Vec6d &init_joint_pos, Eigen::Vector3d translation, PlanParam &param);
     void rotate_traj_planning(std::vector<Vec6d> &result_cont, Vec6d &init_joint_pos, Eigen::Vector3d k_axis, double alpha, PlanParam &param); // (counter clockwise)rotate alpha(rad )about the k_axis. Only change the pose and will not change the end's pos. k_axis's ref frame is the corresponding robot's base frame.
     void joint_space_planning(std::vector<Vec6d> &result_cont, Vec6d &init_joint_pos, Vec6d &target_joint_pos, PlanParam &param);
+    void rotate_arc_traj_planning(std::vector<Vec6d> &result_cont, Vec6d &init_joint_pos, Eigen::Vector3d o_rel, Eigen::Vector3d k_axis, double alpha, PlanParam &param); //rotate around the k_axis which is loacted on o.
+    // o_rel is the relative trans compared to the robot's end. Read P261 for details.  dot(o_rel, k_axis) MUST BE ZERO!!!!
 
 private:
     const double Max_ang_vel = 4 * pi / 180.0;

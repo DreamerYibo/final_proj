@@ -10,12 +10,12 @@ EfortRobo::EfortRobo(const std::string type)
         L2 = 780;
         L3 = 140;
         L4 = 760;
-        L5 = 125;
+        L5 = 137;
         L8 = 170;
         std::cout << "ER20 links' parameter: \n"
                   << L1 << " " << L2 << " " << L3 << " " << L4 << " " << L5 << " " << L8 << "\n";
     }
-    if (type == "ER10")
+    else if (type == "ER10")
     {
         L1 = 422;
         L2 = 681;
@@ -25,6 +25,10 @@ EfortRobo::EfortRobo(const std::string type)
         L8 = 195;
         std::cout << "ER10 links' parameter: \n"
                   << L1 << " " << L2 << " " << L3 << " " << L4 << " " << L5 << " " << L8 << "\n";
+    }
+    else
+    {
+        std::cout << "WRONG ROBO KINE TYPE NAME!\n";
     }
 }
 
@@ -254,11 +258,18 @@ std::vector<Vec6d> EfortRobo::inv_kine(Eigen::Matrix<double, 4, 4> &kn_T0_6, std
     else
     {
         auto x_sol_temp = x_sol; // save the abs diff between x_sol and target_joint_pos
+
         auto iter = x_sol_temp.begin();
         std::vector<double> abs_sum(x_sol.size());
         int i1 = 0;
+
+        if (x_sol_temp.size() == 0)
+        {
+            std::cout << "\ninv_kine has no solutions!\n";
+        }
         while (iter != x_sol_temp.end())
         {
+            //std::cout << (*iter); // debug
             *(iter) = *(iter)-target_joint_pos;
             *(iter) = iter->cwiseAbs();
             //std::cout << "\n debug: " << iter->transpose();
@@ -341,10 +352,11 @@ void EfortRobo::line_traj_planning(std::vector<Vec6d> &result_cont, Vec6d &init_
 
     Vec6d plan_joint_pos = init_joint_pos;
 
-    // std::cout << "\ndebug 3\n";
+    //std::cout << "\ndebug 3\n" << init_mat << "\n";
+
     plan_T0_6.block<3, 3>(0, 0) = init_mat.block<3, 3>(0, 0); // the orientation stays the same
     plan_T0_6.block<1, 4>(3, 0) << 0, 0, 0, 1;
-    // std::cout << "\ndebug 4\n";
+    //std::cout << "\ndebug 4\n";
 
     for (int i = 0; i < param.samples_num; i++)
     {
@@ -353,11 +365,9 @@ void EfortRobo::line_traj_planning(std::vector<Vec6d> &result_cont, Vec6d &init_
 
         Eigen::Vector3d position_plan = start_pos + lambda * (end_pos - start_pos);
         plan_T0_6.block<3, 1>(0, 3) = position_plan;
-
-        plan_joint_pos = (inv_kine(plan_T0_6, "search", plan_joint_pos))[0];
-
         // std::cout << "\ndebug 2\n";
-
+        plan_joint_pos = (inv_kine(plan_T0_6, "search", plan_joint_pos))[0];
+        //std::cout << "\ndebug 3\n";
         result_cont.push_back(plan_joint_pos);
 
         t += delta_t;
@@ -428,6 +438,56 @@ void EfortRobo::rotate_traj_planning(std::vector<Vec6d> &result_cont, Vec6d &ini
                           << temp_diff.transpose() << "\n";
             }
         }
+        result_cont.push_back(plan_joint_pos);
+        t += delta_t;
+    }
+}
+
+void EfortRobo::rotate_arc_traj_planning(std::vector<Vec6d> &result_cont, Vec6d &init_joint_pos, Eigen::Vector3d o_rel, Eigen::Vector3d k_axis, double alpha, PlanParam &param)
+{
+    Vec6d plan_joint_pos = init_joint_pos;
+    Eigen::Vector3d x_rc, y_rc, o_rc;
+    Eigen::Matrix4d init_mat = EfortRobo::forward_kine(init_joint_pos);
+
+    double r = o_rel.norm();
+    double t = param.t0;
+    double t0 = param.t0;
+    double tf = param.tf;
+    double delta_t = (tf - t0) / (param.samples_num - 1.0);
+    Eigen::Matrix4d plan_T0_6 = Eigen::Matrix4d::Zero();
+    plan_T0_6.block<1, 4>(3, 0) << 0, 0, 0, 1;
+    x_rc = -o_rel.normalized(); // remember the negative sign!!!!
+    y_rc = k_axis.cross(x_rc);
+    o_rc = init_mat.block<3, 1>(0, 3) + o_rel;
+
+    Eigen::Matrix4d T0_c;
+
+    T0_c.block<3, 1>(0, 0) = x_rc;
+    T0_c.block<3, 1>(0, 1) = y_rc;
+    T0_c.block<3, 1>(0, 2) = k_axis;
+    T0_c.block<3, 1>(0, 3) = o_rc;
+    T0_c.block<1, 4>(3, 0) << 0, 0, 0, 1;
+
+    if (abs(x_rc.dot(k_axis)) > 1e-5) // not perpendicular
+    {
+        std::cout << "rotate_arc_traj_planning: dot(o_rel,k_axis) must be zero!\n";
+        return;
+    }
+    for (int i = 0; i < param.samples_num; i++)
+    {
+        double tau = (t - t0) / (tf - t0);
+        double lambda = 10 * pow(tau, 3) - 15 * pow(tau, 4) + 6 * pow(tau, 5); //Zero initial condition for v and acc.
+        double xc,yc;
+        Eigen::Vector4d pc; // point of circle. Own frame as the ref.
+
+        xc = r*cos(lambda*alpha);
+        yc = r*sin(lambda*alpha);
+        pc << xc,yc,0,1;
+
+        plan_T0_6.block<3,3>(0,0) = Rot_K(k_axis, alpha * lambda) * init_mat.block<3,3>(0,0);
+        plan_T0_6.block<3,1>(0,3) = (T0_c * pc).array().block<3,1>(0,0);
+        plan_joint_pos = (inv_kine(plan_T0_6, "search", plan_joint_pos))[0];
+        //std::cout << "\ndebug 3\n";
         result_cont.push_back(plan_joint_pos);
         t += delta_t;
     }

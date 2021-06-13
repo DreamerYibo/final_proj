@@ -85,6 +85,7 @@ Vec6d read_joint_pos(const HAND *axis_hand_first, std::string robot_name)
     for (int i = 0; i < 6; i++)
     {
         Acm_AxGetActualPosition(axis_hand_first[i], &joint_pos(i));
+        // std::cout << "\njoint_encode"+std::to_string(i+1) << ": " << joint_pos(i) << "\n"; // debug
         joint_pos(i) = inc2rad(joint_pos(i), i + indexoffset);
     }
     return joint_pos;
@@ -230,6 +231,81 @@ void preview_PTmove(joint_6dofPublisher &mypub, std::vector<Vec6d> &traj_plannin
     }
 }
 
+void preview_PTmove(std::string three_robos_pwd, joint_6dofPublisher &mypub, std::vector<Vec6d> *traj_planning_result_cont_first, PlanParam &param)
+{
+    Eigen::MatrixXd joint_input(6, 1);
+    double publish_sleep_time = (param.tf - param.t0) / (param.samples_num - 1.0) * 1000;
+    ;
+    int ind = 1; // robot 1 as default
+
+    auto iter1 = traj_planning_result_cont_first[0].cbegin();
+    auto iter2 = traj_planning_result_cont_first[1].cbegin();
+    auto iter3 = traj_planning_result_cont_first[2].cbegin();
+
+    if (three_robos_pwd != "3")
+    {
+        std::cout << "\nYOU DONT KNOW WHAT YOU'RE DOING!\n";
+    }
+
+    while ((iter1 != traj_planning_result_cont_first[0].cend()) || (iter2 != traj_planning_result_cont_first[1].cend()) || (iter3 != traj_planning_result_cont_first[2].cend()))
+    {
+        joint_input = iter1->array();
+        mypub.publish(joint_input, 1);
+        joint_input = iter2->array();
+        mypub.publish(joint_input, 2);
+        joint_input = iter3->array();
+        mypub.publish(joint_input, 3);
+
+        //std::cout << "HEREEEEEE!\n"; // debug
+        if (iter1 != traj_planning_result_cont_first[0].cend())
+        {
+            iter1++;
+        }
+        if (iter2 != traj_planning_result_cont_first[1].cend())
+        {
+            iter2++;
+        }
+        if (iter3 != traj_planning_result_cont_first[2].cend())
+        {
+            iter3++;
+        }
+        // joint_input(1) += 0.1;
+        // std::this_thread::sleep_for(std::chrono::milliseconds((int)publish_sleep_time));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+
+void preview_PTmove(joint_6dofPublisher &mypub, std::vector<Vec6d> *traj_planning_result_cont_first, PlanParam &param)
+{
+    Eigen::MatrixXd joint_input(6, 1);
+    double publish_sleep_time = (param.tf - param.t0) / (param.samples_num - 1.0) * 1000;
+    ;
+    int ind = 1; // robot 1 as default
+
+    auto iter1 = traj_planning_result_cont_first[0].cbegin();
+    auto iter2 = traj_planning_result_cont_first[1].cbegin();
+    while ((iter1 != traj_planning_result_cont_first[0].cend()) || (iter2 != traj_planning_result_cont_first[1].cend()))
+    {
+        joint_input = iter1->array();
+        mypub.publish(joint_input, 1);
+        joint_input = iter2->array();
+        mypub.publish(joint_input, 2);
+
+        //std::cout << "HEREEEEEE!\n"; // debug
+        if (iter1 != traj_planning_result_cont_first[0].cend())
+        {
+            iter1++;
+        }
+        if (iter2 != traj_planning_result_cont_first[1].cend())
+        {
+            iter2++;
+        }
+        // joint_input(1) += 0.1;
+        // std::this_thread::sleep_for(std::chrono::milliseconds((int)publish_sleep_time));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+
 void set_PTdata(PlanParam &param, std::vector<Vec6d> &traj_planning_result_cont, HAND *m_Axishand, std::string robot_name)
 {
     double time = 0;
@@ -281,6 +357,10 @@ void set_PTdata(PlanParam &param, std::vector<Vec6d> &traj_planning_result_cont,
             // }
 
             move_rel_pulse = (traj_planning_result_cont[j](i) - traj_planning_result_cont[0](i)) * 180.0 / pi * incpdeg[i + indexoffset]; // robo2. NOTE
+            // if(robot_name == "robot3")
+            // {
+            //     std::cout << "\nrobot3 move_rel_pulse: " << move_rel_pulse << "\n";
+            // }
             if (j > 0)
             {
                 if (abs(traj_planning_result_cont[j](i) - traj_planning_result_cont[j - 1](i)) > 1e-8) // IMPORTANT!!!!! SOMETIMES ONLY ONE AXIS MOVE! Do not add the same move rel value all the time!
